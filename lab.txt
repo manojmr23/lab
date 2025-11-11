@@ -1,0 +1,142 @@
+EXP 5:
+
+mkdir python-ci-docker-lab
+cd python-ci-docker-lab
+
+python-ci-docker-lab/
+│
+├── __init__.py   ✅ (empty file)
+├── app.py
+├── requirements.txt
+├── Dockerfile
+├── .gitignore
+│
+├── tests/
+│   └── test_app.py
+│
+└── .github/
+    └── workflows/
+        └── ci-dockerhub.yml
+
+STEP 2 — Create Python Files
+app.py
+def add(a, b):
+    return a + b
+
+if __name__ == "__main__":
+    print("Hello from Python CI Lab!")
+    print("2 + 3 =", add(2, 3))
+
+tests/test_app.py
+import sys
+import os
+# ✅ Add the project root to Python's module path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from app import add
+def test_add():
+    assert add(2, 3) == 5
+    assert add(-1, 1) == 0
+
+requirements.txt
+pytest==8.3.2
+
+Dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+CMD ["python", "app.py"]
+
+gitignore
+__pycache__/
+.venv/
+.pytest_cache/
+.DS_Store
+*.pyc
+
+ci-dockerhub.yml
+
+name: ci-dockerhub
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "*" ]
+  pull_request:
+    branches: [ "main" ]
+jobs:
+  build-test-push:
+    runs-on: ubuntu-latest
+    steps:
+    # Step 1: Checkout code
+    - name: Checkout
+      uses: actions/checkout@v4
+    # Step 2: Set up Python 3.11
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    # Step 3: Install dependencies
+    - name: Install deps
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    # Step 4: Run tests
+    - name: Run tests
+      run: pytest -q
+    # Step 5: Set Docker image metadata
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        # ✅ Hardcode your Docker Hub username to prevent invalid tags
+        images: manojmr232005/python-ci-lab
+        tags: |
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=sha,prefix=sha-,format=short
+          type=ref,event=tag
+    # Step 6: Set up QEMU (for multi-arch builds)
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+    # Step 7: Set up Docker Buildx
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    # Step 8: Login to Docker Hub
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    # Step 9: Build and push the Docker image
+    - name: Build and push
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        platforms: linux/amd64
+
+This file tells GitHub Actions:
+Test Python code
+Build Docker image
+Push it to Docker Hub automatically
+________________________________________
+🧪 STEP 4 — Test Locally (Optional)
+Run manually to confirm before CI:
+python app.py
+python -m pytest -q
+docker build -t yourname/python-ci-lab:local .
+docker run --rm yourname/python-ci-lab:local
+
+STEP 5 — Initialize Git & Push
+git init
+git add .
+git commit -m "init lab"
+git branch -M main
+git remote add origin https://github.com/<your-username>/python-ci-docker-lab.git
+git push -u origin main
+
+
+git commit --allow-empty -m "retrigger: fix Docker Hub login"
+>> git push
